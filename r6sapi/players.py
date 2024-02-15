@@ -93,14 +93,13 @@ class PlayerBatch:
         root_player = self.players[self.player_ids[0]]
         root_method = getattr(root_player, name)
 
-        @asyncio.coroutine
-        def _proxy(*args, **kwargs):
+        async def _proxy(*args, **kwargs):
             results = {}
 
             # temporarily override url builder so we get data for all players
             root_player.url_builder.player_ids = ",".join(self.player_ids)
 
-            root_result = yield from root_method(*args, **kwargs)
+            root_result = await root_method(*args, **kwargs)
             results[root_player.id] = root_result
             
             data = root_player._last_data
@@ -108,7 +107,7 @@ class PlayerBatch:
 
             for player_id in self.players:
                 if player_id != root_player.id:
-                    results[player_id] = yield from getattr(self.players[player_id], name)(*args, **kwargs)
+                    results[player_id] = await getattr(self.players[player_id], name)(*args, **kwargs)
 
             # reset root player url builder to default state
             root_player.url_builder.player_ids = root_player.id
@@ -217,10 +216,9 @@ class Player:
     def spaceid(self):
         return self.auth.spaceids[self.platform]
 
-    @asyncio.coroutine
-    def _fetch_statistics(self, *statistics, data=None):
+    async def _fetch_statistics(self, *statistics, data=None):
         if data is None:
-            data = yield from self.auth.get(self.url_builder.fetch_statistic_url(statistics))
+            data = await self.auth.get(self.url_builder.fetch_statistic_url(statistics))
             self._last_data = data
 
         if "results" not in data or self.id not in data["results"]:
@@ -236,13 +234,12 @@ class Player:
 
         return stats
 
-    @asyncio.coroutine
-    def load_level(self, data=None):
+    async def load_level(self, data=None):
         """|coro|
 
         Load the players XP and level"""
         if data is None:
-            data = yield from self.auth.get(self.url_builder.load_level_url())
+            data = await self.auth.get(self.url_builder.load_level_url())
             self._last_data = data
 
         if "player_profiles" in data and len(data["player_profiles"]) > 0:
@@ -251,16 +248,14 @@ class Player:
         else:
             raise InvalidRequest("Missing key player_profiles in returned JSON object %s" % str(data))
 
-    @asyncio.coroutine
-    def check_level(self):
+    async def check_level(self):
         """|coro|
 
         Check the players XP and level, only loading it if it hasn't been loaded yet"""
         if not hasattr(self, "level"):
-            yield from self.load_level()
+            await self.load_level()
 
-    @asyncio.coroutine
-    def load_rank(self, region, season=-1, data=None):
+    async def load_rank(self, region, season=-1, data=None):
         """|coro|
         Loads the players rank for this region and season
 
@@ -276,7 +271,7 @@ class Player:
         :class:`Rank`
             the players rank for this region and season"""
         if data is None:
-            data = yield from self.auth.get(self.url_builder.load_rank_url(region, season))
+            data = await self.auth.get(self.url_builder.load_rank_url(region, season))
             self._last_data = data
 
         queried_season = seasons[season]
@@ -289,8 +284,7 @@ class Player:
         else:
             raise InvalidRequest("Missing players key in returned JSON object %s" % str(data))
 
-    @asyncio.coroutine
-    def get_rank(self, region, season=-1, data=None):
+    async def get_rank(self, region, season=-1, data=None):
         """|coro|
 
         Checks the players rank for this region, only loading it if it hasn't already been found
@@ -310,7 +304,7 @@ class Player:
         if cache_key in self.ranks:
             return self.ranks[cache_key]
 
-        result = yield from self.load_rank(region, season, data=data)
+        result = await self.load_rank(region, season, data=data)
         return result
 
     @staticmethod
@@ -348,8 +342,7 @@ class Player:
         return unique_data
 
 
-    @asyncio.coroutine
-    def load_all_operators(self, data=None):
+    async def load_all_operators(self, data=None):
         """|coro|
 
         Loads the player stats for all operators
@@ -371,7 +364,7 @@ class Player:
         statistics = ",".join(statistics)
 
         if data is None:
-            data = yield from self.auth.get(self.url_builder.load_operator_url(statistics))
+            data = await self.auth.get(self.url_builder.load_operator_url(statistics))
             self._last_data = data
 
         if "results" not in data or self.id not in data["results"]:
@@ -387,8 +380,7 @@ class Player:
 
         return self.operators
 
-    @asyncio.coroutine
-    def get_all_operators(self, data=None):
+    async def get_all_operators(self, data=None):
         """|coro|
 
         Checks the player stats for all operators, loading them all again if any aren't found
@@ -401,11 +393,10 @@ class Player:
         if len(self.operators) >= len(OperatorStatisticNames):
             return self.operators
 
-        result = yield from self.load_all_operators(data=data)
+        result = await self.load_all_operators(data=data)
         return result
 
-    @asyncio.coroutine
-    def load_operator(self, operator, data=None):
+    async def load_operator(self, operator, data=None):
         """|coro|
 
         Loads the players stats for the operator
@@ -441,7 +432,7 @@ class Player:
         if data is None:
             # join the statistic name strings to build the url
             statistics = ",".join(statistics)
-            data = yield from self.auth.get(self.url_builder.load_operator_url(statistics))
+            data = await self.auth.get(self.url_builder.load_operator_url(statistics))
             self._last_data = data
 
         if "results" not in data or self.id not in data["results"]:
@@ -456,8 +447,7 @@ class Player:
         self.operators[operator] = oper
         return oper
 
-    @asyncio.coroutine
-    def get_operator(self, operator, data=None):
+    async def get_operator(self, operator, data=None):
         """|coro|
 
         Checks the players stats for this operator, only loading them if they haven't already been found
@@ -474,11 +464,10 @@ class Player:
         if operator in self.operators:
             return self.operators[operator]
 
-        result = yield from self.load_operator(operator, data=data)
+        result = await self.load_operator(operator, data=data)
         return result
 
-    @asyncio.coroutine
-    def load_weapons(self, data=None):
+    async def load_weapons(self, data=None):
         """|coro|
 
         Load the players weapon stats
@@ -488,7 +477,7 @@ class Player:
         list[:class:`Weapon`]
             list of all the weapon objects found"""
         if data is None:
-            data = yield from self.auth.get(self.url_builder.load_weapon_url())
+            data = await self.auth.get(self.url_builder.load_weapon_url())
             self._last_data = data
 
         if not "results" in data or not self.id in data["results"]:
@@ -499,8 +488,7 @@ class Player:
 
         return self.weapons
 
-    @asyncio.coroutine
-    def check_weapons(self, data=None):
+    async def check_weapons(self, data=None):
         """|coro|
 
         Check the players weapon stats, only loading them if they haven't already been found
@@ -510,11 +498,10 @@ class Player:
         list[:class:`Weapon`]
             list of all the weapon objects found"""
         if len(self.weapons) == 0:
-            yield from self.load_weapons(data=data)
+            await self.load_weapons(data=data)
         return self.weapons
 
-    @asyncio.coroutine
-    def load_gamemodes(self, data=None):
+    async def load_gamemodes(self, data=None):
         """|coro|
 
         Loads the players gamemode stats
@@ -524,7 +511,7 @@ class Player:
         dict
             dict of all the gamemodes found (gamemode_name: :class:`Gamemode`)"""
 
-        stats = yield from self._fetch_statistics("secureareapvp_matchwon", "secureareapvp_matchlost", "secureareapvp_matchplayed",
+        stats = await self._fetch_statistics("secureareapvp_matchwon", "secureareapvp_matchlost", "secureareapvp_matchplayed",
                                                   "secureareapvp_bestscore", "rescuehostagepvp_matchwon", "rescuehostagepvp_matchlost",
                                                   "rescuehostagepvp_matchplayed", "rescuehostagepvp_bestscore", "plantbombpvp_matchwon",
                                                   "plantbombpvp_matchlost", "plantbombpvp_matchplayed", "plantbombpvp_bestscore",
@@ -535,8 +522,7 @@ class Player:
 
         return self.gamemodes
 
-    @asyncio.coroutine
-    def check_gamemodes(self, data=None):
+    async def check_gamemodes(self, data=None):
         """|coro|
 
         Checks the players gamemode stats, only loading them if they haven't already been found
@@ -546,16 +532,15 @@ class Player:
         dict
             dict of all the gamemodes found (gamemode_name: :class:`Gamemode`)"""
         if len(self.gamemodes) == 0:
-            yield from self.load_gamemodes(data=data)
+            await self.load_gamemodes(data=data)
         return self.gamemodes
 
-    @asyncio.coroutine
-    def load_general(self, data=None):
+    async def load_general(self, data=None):
         """|coro|
 
         Loads the players general stats"""
 
-        stats = yield from self._fetch_statistics("generalpvp_timeplayed", "generalpvp_matchplayed", "generalpvp_matchwon",
+        stats = await self._fetch_statistics("generalpvp_timeplayed", "generalpvp_matchplayed", "generalpvp_matchwon",
                                                   "generalpvp_matchlost", "generalpvp_kills", "generalpvp_death",
                                                   "generalpvp_bullethit", "generalpvp_bulletfired", "generalpvp_killassists",
                                                   "generalpvp_revive", "generalpvp_headshot", "generalpvp_penetrationkills",
@@ -591,21 +576,19 @@ class Player:
         self.blind_kills = stats.get(statname + "blindkills")
 
 
-    @asyncio.coroutine
-    def check_general(self, data=None):
+    async def check_general(self, data=None):
         """|coro|
 
         Checks the players general stats, only loading them if they haven't already been found"""
         if not hasattr(self, "kills"):
-            yield from self.load_general(data=data)
+            await self.load_general(data=data)
 
-    @asyncio.coroutine
-    def load_queues(self, data=None):
+    async def load_queues(self, data=None):
         """|coro|
 
         Loads the players game queues"""
 
-        stats = yield from self._fetch_statistics("casualpvp_matchwon", "casualpvp_matchlost", "casualpvp_timeplayed",
+        stats = await self._fetch_statistics("casualpvp_matchwon", "casualpvp_matchlost", "casualpvp_timeplayed",
                                                   "casualpvp_matchplayed", "casualpvp_kills", "casualpvp_death",
                                                   "rankedpvp_matchwon", "rankedpvp_matchlost", "rankedpvp_timeplayed",
                                                   "rankedpvp_matchplayed", "rankedpvp_kills", "rankedpvp_death", data=data)
@@ -614,20 +597,18 @@ class Player:
         self.casual = GameQueue("casual", stats)
 
 
-    @asyncio.coroutine
-    def check_queues(self, data=None):
+    async def check_queues(self, data=None):
         """|coro|
 
         Checks the players game queues, only loading them if they haven't already been found"""
         if self.casual is None:
-            yield from self.load_queues(data=data)
+            await self.load_queues(data=data)
 
-    @asyncio.coroutine
-    def load_terrohunt(self, data=None):
+    async def load_terrohunt(self, data=None):
         """|coro|
 
         Loads the player's general stats for terrorist hunt"""
-        stats = yield from self._fetch_statistics("generalpve_dbnoassists", "generalpve_death", "generalpve_revive",
+        stats = await self._fetch_statistics("generalpve_dbnoassists", "generalpve_death", "generalpve_revive",
                                                   "generalpve_matchwon", "generalpve_suicide", "generalpve_servershacked",
                                                   "generalpve_serverdefender", "generalpve_barricadedeployed", "generalpve_reinforcementdeploy",
                                                   "generalpve_kills", "generalpve_hostagedefense", "generalpve_bulletfired",
@@ -673,13 +654,12 @@ class Player:
 
         return self.terrorist_hunt
 
-    @asyncio.coroutine
-    def check_terrohunt(self, data=None):
+    async def check_terrohunt(self, data=None):
         """|coro|
 
         Checks the players general stats for terrorist hunt, only loading them if they haven't been loaded already"""
         if self.terrorist_hunt is None:
-            yield from self.load_terrohunt(data=data)
+            await self.load_terrohunt(data=data)
         return self.terrorist_hunt
 
     @property

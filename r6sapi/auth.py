@@ -9,7 +9,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 """
 
 import aiohttp
-import asyncio
 import time
 import json
 import base64
@@ -110,21 +109,19 @@ class Auth:
         self._login_cooldown = 0
         self._session_start = time.time()
 
-    @asyncio.coroutine
-    def close(self):
+    async def close(self):
         """|coro|
         
         Closes the session associated with the auth object"""
-        yield from self.session.close()
+        await self.session.close()
 
-    @asyncio.coroutine
-    def refresh_session(self):
+    async def refresh_session(self):
         """|coro|
 
         Closes the current session and opens a new one"""
         if self.session:
             try:
-                yield from self.session.close()
+                await self.session.close()
             except:
                 # we don't care if closing the session does nothing
                 pass 
@@ -132,37 +129,34 @@ class Auth:
         self.session = aiohttp.ClientSession()
         self._session_start = time.time()
 
-    @asyncio.coroutine
-    def _ensure_session_valid(self):
+    async def _ensure_session_valid(self):
         if not self.session:
-            yield from self.refresh_session()
+            await self.refresh_session()
         elif self.refresh_session_period >= 0 and time.time() - self._session_start >= self.refresh_session_period:
-            yield from self.refresh_session()
+            await self.refresh_session()
 
-    @asyncio.coroutine
-    def get_session(self):
+    async def get_session(self):
         """|coro|
         
         Retrieves the current session, ensuring it's valid first"""
-        yield from self._ensure_session_valid()
+        await self._ensure_session_valid()
         return self.session
 
-    @asyncio.coroutine
-    def connect(self):
+    async def connect(self):
         """|coro|
 
         Connect to ubisoft, automatically called when needed"""
         if time.time() < self._login_cooldown:
             raise FailedToConnect("login on cooldown")
 
-        session = yield from self.get_session()
-        resp = yield from session.post("https://public-ubiservices.ubi.com/v3/profiles/sessions", headers = {
+        session = await self.get_session()
+        resp = await session.post("https://public-ubiservices.ubi.com/v3/profiles/sessions", headers = {
             "Content-Type": "application/json",
             "Ubi-AppId": self.appid,
             "Authorization": "Basic " + self.token
         }, data=json.dumps({"rememberMe": True}))
 
-        data = yield from resp.json()
+        data = await resp.json()
 
         message = "Unknown Error"
         if "message" in data and "httpCode" in data:
@@ -179,19 +173,18 @@ class Auth:
         else:
             raise FailedToConnect(message)
 
-    @asyncio.coroutine
-    def get(self, *args, retries=0, referer=None, json=True, **kwargs):
+    async def get(self, *args, retries=0, referer=None, json=True, **kwargs):
         if not self.key:
             last_error = None
             for i in range(self.max_connect_retries):
                 try:
-                    yield from self.connect()
+                    await self.connect()
                     break
                 except FailedToConnect as e:
                     last_error = e
             else:
                 # assume this error is going uncaught, so we close the session
-                yield from self.close()
+                await self.close()
 
                 if last_error:
                     raise last_error
@@ -199,7 +192,7 @@ class Auth:
                     raise FailedToConnect("Unknown Error")
 
         if "headers" not in kwargs: kwargs["headers"] = {}
-        kwargs["headers"]["Authorization"] = "Ubi_v1 t=" + self.key
+        kwargs["headers"]["Authorization"] = f"Ubi_v1 t={self.key}"
         kwargs["headers"]["Ubi-AppId"] = self.appid
         kwargs["headers"]["Ubi-SessionId"] = self.sessionid
         kwargs["headers"]["Connection"] = "keep-alive"
@@ -208,24 +201,24 @@ class Auth:
                 referer = "https://game-rainbow6.ubi.com/en-gb/uplay/player-statistics/%s/multiplayer" % referer.id
             kwargs["headers"]["Referer"] = str(referer)
 
-        session = yield from self.get_session()
-        resp = yield from session.get(*args, **kwargs)
+        session = await self.get_session()
+        resp = await session.get(*args, **kwargs)
 
         if json:
             try:
-                data = yield from resp.json()
+                data = await resp.json()
             except:
-                text = yield from resp.text()
+                text = await resp.text()
 
                 message = text.split("h1>")
+                code = 0
                 if len(message) > 1:
                     message = message[1][:-2]
-                    code = 0
                     if "502" in message: code = 502
                 else:
                     message = text
 
-                raise InvalidRequest("Received a text response, expected JSON response. Message: %s" % message, code=code)
+                raise InvalidRequest("Received a text response, expected JSON response. Message: %s" % message, code=code) 
 
             if "httpCode" in data:
                 if data["httpCode"] == 401:
@@ -235,7 +228,7 @@ class Auth:
 
                     # key no longer works, so remove key and let the following .get() call refresh it
                     self.key = None
-                    result = yield from self.get(*args, retries=retries+1, **kwargs)
+                    result = await self.get(*args, retries=retries+1, **kwargs)
                     return result
                 else:
                     msg = data.get("message", "")
@@ -244,11 +237,10 @@ class Auth:
 
             return data
         else:
-            text = yield from resp.text()
+            text = await resp.text()
             return text
 
-    @asyncio.coroutine
-    def get_players(self, name=None, platform=None, uid=None):
+    async def get_players(self, name=None, platform=None, uid=None):
         """|coro|
 
         get a list of players matching the term on that platform,
@@ -292,12 +284,12 @@ class Auth:
                 return self.cache[platform][cache_key][1]
 
         if name:
-            data = yield from self.get("https://public-ubiservices.ubi.com/v3/profiles?nameOnPlatform=%s&platformType=%s" % (parse.quote(name), parse.quote(platform)))
+            data = await self.get("https://public-ubiservices.ubi.com/v3/profiles?nameOnPlatform=%s&platformType=%s" % (parse.quote(name), parse.quote(platform)))
         else:
-            data = yield from self.get("https://public-ubiservices.ubi.com/v3/users/%s/profiles?platformType=%s" % (uid, parse.quote(platform)))
+            data = await self.get("https://public-ubiservices.ubi.com/v3/users/%s/profiles?platformType=%s" % (uid, parse.quote(platform)))
 
-        if "profiles" in data:
-            results = [Player(self, x) for x in data["profiles"] if x.get("platformType", "") == platform]
+        if "profiles" in data and isinstance(data, dict):
+            results = [Player(self, x) for x in data.get("profiles",'') if x.get("platformType", "") == platform]
             if len(results) == 0: raise InvalidRequest("No results")
             if self.cachetime != 0:
                 self.cache[platform][cache_key] = [time.time() + self.cachetime, results]
@@ -305,8 +297,7 @@ class Auth:
         else:
             raise InvalidRequest("Missing key profiles in returned JSON object %s" % str(data))
 
-    @asyncio.coroutine
-    def get_player(self, name=None, platform=None, uid=None):
+    async def get_player(self, name=None, platform=None, uid=None):
         """|coro|
 
         Calls get_players and returns the first element,
@@ -326,11 +317,10 @@ class Auth:
         :class:`Player`
             player found"""
 
-        results = yield from self.get_players(name=name, platform=platform, uid=uid)
+        results = await self.get_players(name=name, platform=platform, uid=uid)
         return results[0]
 
-    @asyncio.coroutine
-    def get_player_batch(self, names=None, platform=None, uids=None):
+    async def get_player_batch(self, names=None, platform=None, uids=None):
         """|coro|
         
         Calls get_player for each name and uid you give, and creates a player batch out of
@@ -357,12 +347,12 @@ class Auth:
 
         if names is not None:
             for name in names:
-                player = yield from self.get_player(name=name, platform=platform)
+                player = await self.get_player(name=name, platform=platform)
                 players[player.id] = player
 
         if uids is not None:
             for uid in uids:
-                player = yield from self.get_player(uid=uid, platform=platform)
+                player = await self.get_player(uid=uid, platform=platform)
                 players[player.id] = player
         
         return PlayerBatch(players)

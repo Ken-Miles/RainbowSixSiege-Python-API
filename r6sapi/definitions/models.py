@@ -46,10 +46,13 @@ class Loadout:
 
     """
     def __repr__(self):
-        return "Loadout(id='{}', name='{}', weapon_type='{}', weapon_image_url={})".format(self.id, self.name, self.weapon_type, self.weapon_image_url)
+        return f"Loadout(id={self.id}, name={self.name}, weapon_type={self.weapon_type}, weapon_image_url={self.weapon_image_url})"
 
     def __eq__(self, other):
-        return other.id == self.id and other.name == self.name and other.weapon_type == self.weapon_type and other.weapon_image_url == self.weapon_image_url
+        return other.id == self.id \
+            and other.name == self.name \
+            and other.weapon_type == self.weapon_type \
+            and other.weapon_image_url == self.weapon_image_url
 
     def __init__(self, id, name, weapon_type, weapon_image_url):
         self.id = id
@@ -116,9 +119,8 @@ class OperatorInfo:
         return self.id == other.id and self.name == other.name and self.icon_url == other.icon_url and self.loadouts == r6sapi.definitions.loadouts and self.index == other.index
 
     def __repr__(self):
-        return "OperatorInfo(id='{}', name='{}', icon_url='{}'," \
-               "loadouts={}, side={}, roles={}, index={})".format(self.id, self.name, self.icon_url, self.loadouts,
-                                                        self.side, self.roles, self.index)
+        return f"OperatorInfo(id={self.id}, name={self.name}, icon_url={self.icon_url}," \
+               f"loadouts={self.loadouts}, side={self.side}, roles={self.roles}, index={self.index})"
 
     def __str__(self):
         return self.__repr__()
@@ -181,7 +183,7 @@ class UniqueOperatorStat:
         return self.id_template.format("pve")
 
     def __repr__(self):
-        return "UniqueOperatorStat(name={}, id_template={})".format(self.name, self.id_template)
+        return f"UniqueOperatorStat(name={self.name}, id_template={self.id_template})"
 
     def __str__(self):
         return repr(self)
